@@ -1,16 +1,14 @@
 # app/watch.py
 from bs4 import BeautifulSoup
-from app.config import scraper, BASE_URL, HEADERS
+from app.config import session, BASE_URL # GANTI 'scraper' jadi 'session'
 import re
 
 def get_watch_url(slug, episode_num):
-    # Contoh URL: /anime/4871/kami-no-shizuku/episode/12
     url = f"{BASE_URL}/anime/{slug}/episode/{episode_num}"
-    response = scraper.get(url, headers=HEADERS)
+    response = session.get(url, timeout=15) # GANTI scraper.get jadi session.get
     soup = BeautifulSoup(response.text, 'html.parser')
     
     # Cari iframe player
-    # Biasanya ada di dalam div class="player-embed" atau langsung tag <iframe>
     iframe = soup.find('iframe')
     
     streaming_url = None
@@ -20,11 +18,11 @@ def get_watch_url(slug, episode_num):
             streaming_url = 'https:' + streaming_url
             
     # Cari judul episode & link navigasi (Prev/Next)
-    ep_title = soup.find('h3', class_='anime__video__title')
+    ep_title = soup.find('h3', class_='anime__video__title') or soup.find('h2')
     
     # Cari tombol Next / Previous episode
-    next_ep = soup.find('a', string=re.compile("Next", re.I))
-    prev_ep = soup.find('a', string=re.compile("Prev", re.I))
+    next_ep = soup.find('a', string=re.compile("Next", re.I)) or soup.find('a', class_='next')
+    prev_ep = soup.find('a', string=re.compile("Prev", re.I)) or soup.find('a', class_='prev')
 
     return {
         'slug': slug,
