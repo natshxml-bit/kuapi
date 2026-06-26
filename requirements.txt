@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+cloudscraper
+beautifulsoup4
+cachetools
