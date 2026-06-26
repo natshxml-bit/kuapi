@@ -14,12 +14,24 @@ cache = TTLCache(maxsize=100, ttl=300) # Cache 5 Menit
 def root():
     return {"status": "Online", "endpoints": ["/api/home", "/api/detail/{slug}", "/api/watch/{slug}/{episode}"]}
 
+# app/main.py
+# ... (import & setup cache sama seperti sebelumnya) ...
+
 @app.get("/api/home")
 def api_home():
     if "home_data" in cache:
         return {"source": "cache", "data": cache["home_data"]}
     
-    data = home.get_homepage()
+    # Panggil fungsi yang sekarang return 2 nilai (data, debug_info)
+    data, debug_info = home.get_homepage()
+    
+    # Kalau data kosong, munculkan info debug biar ketahuan salahnya di mana
+    if not data:
+        return {
+            "source": "error_gagal_scrape", 
+            "debug": debug_info
+        }
+        
     cache["home_data"] = data
     return {"source": "fresh_scrape", "total": len(data), "data": data}
 

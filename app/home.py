@@ -1,12 +1,23 @@
 # app/home.py
 from bs4 import BeautifulSoup
-from app.config import scraper, BASE_URL, HEADERS
+from app.config import session, BASE_URL
 
 def get_homepage():
     url = f"{BASE_URL}/"
-    response = scraper.get(url, headers=HEADERS)
-    soup = BeautifulSoup(response.text, 'html.parser')
     
+    # Request pakai curl_cffi
+    response = session.get(url, timeout=15)
+    
+    # 🕵️‍♂️ DEBUGGING: Cek apakah kena blok Cloudflare
+    if response.status_code != 200 or "Just a moment..." in response.text or "Checking your browser" in response.text:
+        return [], {
+            "status": "BLOCKED_CLOUDFLARE",
+            "status_code": response.status_code,
+            "pesan": "IP Railway terdeteksi bot oleh Cloudflare.",
+            "html_bukti": response.text[:300] # Potongan HTML buat buktiin
+        }
+
+    soup = BeautifulSoup(response.text, 'html.parser')
     results = []
     sections = soup.find_all('section')
     
@@ -33,4 +44,14 @@ def get_homepage():
                 'thumbnail': div.get('data-setbg', ''),
                 'link': BASE_URL + item.get('href', '')
             })
-    return results
+            
+    # 🕵️‍♂️ DEBUGGING: Kalau HTML berhasil dibuka tapi parsing gagal (Kuramanime ganti class)
+    if not results:
+        return [], {
+            "status": "PARSING_ERROR",
+            "status_code": response.status_code,
+            "pesan": "HTML berhasil diambil, tapi struktur class HTML Kuramanime mungkin berubah.",
+            "html_bukti": response.text[:500]
+        }
+        
+    return results, None

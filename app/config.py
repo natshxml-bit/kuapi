@@ -1,17 +1,14 @@
 # app/config.py
-import cloudscraper
+from curl_cffi import requests
 
-# Gunakan cloudscraper untuk bypass Cloudflare dasar
-scraper = cloudscraper.create_scraper(
-    browser={
-        'browser': 'chrome',
-        'platform': 'windows',
-        'mobile': False
+# Menyamar jadi Chrome 124, bypass Cloudflare WAF
+session = requests.Session(
+    impersonate="chrome124",
+    headers={
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://v9.kuramanime.work/",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
     }
 )
 
 BASE_URL = "https://v9.kuramanime.work"
-HEADERS = {
-    "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": BASE_URL
-}
