@@ -1,23 +1,23 @@
 # app/home.py
 from bs4 import BeautifulSoup
-from app.config import session, BASE_URL
+from app.config import fetch_html, BASE_URL
 
 def get_homepage():
     url = f"{BASE_URL}/"
+    html = fetch_html(url)
     
-    # Request pakai curl_cffi
-    response = session.get(url, timeout=15)
-    
-    # 🕵️‍♂️ DEBUGGING: Cek apakah kena blok Cloudflare
-    if response.status_code != 200 or "Just a moment..." in response.text or "Checking your browser" in response.text:
+    # Kalau fetch_html return None atau masih kena blok CF
+    if not html:
+        return [], {"status": "FETCH_FAILED", "pesan": "Gagal mengambil HTML (Timeout/Blokir)."}
+        
+    if "Just a moment..." in html:
         return [], {
             "status": "BLOCKED_CLOUDFLARE",
-            "status_code": response.status_code,
-            "pesan": "IP Railway terdeteksi bot oleh Cloudflare.",
-            "html_bukti": response.text[:300] # Potongan HTML buat buktiin
+            "pesan": "Masih diblokir Cloudflare. Solusi: Wajib deploy Flaresolverr di Railway.",
+            "html_bukti": html[:200]
         }
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(html, 'html.parser')
     results = []
     sections = soup.find_all('section')
     
@@ -36,22 +36,23 @@ def get_homepage():
             quality_tag = div.find('div', class_='view')
             title_h5 = div.find('h5', class_='sidebar-title-h5')
             
+            link_href = item.get('href', '')
+            full_link = BASE_URL + link_href if link_href.startswith('/') else link_href
+            
             results.append({
                 'kategori': section_name,
                 'judul': title_h5.get_text(strip=True) if title_h5 else '-',
                 'episode': ep_tag.get_text(strip=True) if ep_tag else '-',
                 'kualitas': quality_tag.get_text(strip=True) if quality_tag else '-',
                 'thumbnail': div.get('data-setbg', ''),
-                'link': BASE_URL + item.get('href', '')
+                'link': full_link
             })
             
-    # 🕵️‍♂️ DEBUGGING: Kalau HTML berhasil dibuka tapi parsing gagal (Kuramanime ganti class)
     if not results:
-        return [], {
+         return [], {
             "status": "PARSING_ERROR",
-            "status_code": response.status_code,
-            "pesan": "HTML berhasil diambil, tapi struktur class HTML Kuramanime mungkin berubah.",
-            "html_bukti": response.text[:500]
+            "pesan": "HTML berhasil dibuka, tapi struktur class HTML Kuramanime mungkin berubah.",
+            "html_bukti": html[:300]
         }
         
     return results, None

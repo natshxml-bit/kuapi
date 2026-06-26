@@ -1,18 +1,22 @@
 # app/detail.py
 from bs4 import BeautifulSoup
-from app.config import session, BASE_URL # GANTI 'scraper' jadi 'session'
+from app.config import fetch_html, BASE_URL
 
 def get_detail(slug):
     url = f"{BASE_URL}/anime/{slug}"
-    response = session.get(url, timeout=15) # GANTI scraper.get jadi session.get
-    soup = BeautifulSoup(response.text, 'html.parser')
+    html = fetch_html(url)
     
-    # 1. Ambil Info Dasar
+    if not html or "Just a moment..." in html:
+        return {"error": "Gagal mengambil detail (Cloudflare/Timeout)"}
+
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # 1. Info Dasar
     title = soup.find('h2', class_='anime__details__title')
     synopsis = soup.find('div', class_='anime__details__text')
     cover = soup.find('div', class_='anime__details__pic')
     
-    # 2. Ambil Metadata (Genre, Studio, Season, dll)
+    # 2. Metadata
     metadata = {}
     widget = soup.find('div', class_='anime__details__widget')
     if widget:
@@ -22,32 +26,27 @@ def get_detail(slug):
             if span and p:
                 metadata[span.get_text(strip=True)] = p.get_text(strip=True)
 
-    # 3. Ambil List Episode
+    # 3. List Episode
     episodes = []
-    # Kuramanime biasanya pakai select dropdown atau list untuk episode
     ep_list = soup.find('select', class_='select-episode') or soup.find('div', class_='anime__details__episodes') or soup.find('ul', class_='listing')
     
     if ep_list:
-        # Jika berupa select dropdown
+        # Kalau bentuknya dropdown select
         if ep_list.name == 'select':
             for option in ep_list.find_all('option'):
                 ep_name = option.get_text(strip=True)
                 ep_link = option.get('value', '')
                 if ep_link and ep_link != '#':
-                    episodes.append({
-                        'nama_episode': ep_name,
-                        'link': BASE_URL + ep_link if ep_link.startswith('/') else ep_link
-                    })
-        # Jika berupa list <a>
+                    full_link = BASE_URL + ep_link if ep_link.startswith('/') else ep_link
+                    episodes.append({'nama_episode': ep_name, 'link': full_link})
+        # Kalau bentuknya list <a>
         else:
             for a in ep_list.find_all('a'):
                 ep_name = a.get_text(strip=True)
                 ep_link = a.get('href', '')
                 if ep_link:
-                    episodes.append({
-                        'nama_episode': ep_name,
-                        'link': BASE_URL + ep_link if ep_link.startswith('/') else ep_link
-                    })
+                    full_link = BASE_URL + ep_link if ep_link.startswith('/') else ep_link
+                    episodes.append({'nama_episode': ep_name, 'link': full_link})
 
     return {
         'slug': slug,
