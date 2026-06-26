@@ -4,38 +4,37 @@ import time
 
 BASE_URL = "https://v9.kuramanime.work"
 
-# Header palsu agar dikira browser Chrome Windows asli
 HEADERS = {
     "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
     "Referer": BASE_URL,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="110", "Chromium";v="110"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"'
 }
+
+# Daftar "topeng" browser. Kalau satu ketahuan bot, ganti ke berikutnya!
+PROFILES = ["chrome110", "chrome120", "safari15_5", "chrome101"]
 
 def fetch_html(url, retries=2):
     """
-    Fungsi pintar untuk ambil HTML. 
-    Pakai chrome110 (lebih stabil bypass CF) dan auto-retry kalau gagal.
+    Mencoba beberapa profil browser secara berurutan.
     """
-    session = requests.Session(impersonate="chrome110")
-    
-    for attempt in range(retries):
-        try:
-            response = session.get(url, headers=HEADERS, timeout=20)
-            html = response.text
-            
-            # Cek apakah kena halaman "Just a moment..."
-            if "Just a moment..." in html or "Checking your browser" in html:
-                print(f"[!] Cloudflare block terdeteksi pada percobaan ke-{attempt+1}. Menunggu 3 detik...")
-                time.sleep(3)
-                continue # Coba lagi
+    for profile in PROFILES:
+        session = requests.Session(impersonate=profile)
+        for attempt in range(retries):
+            try:
+                response = session.get(url, headers=HEADERS, timeout=20)
+                html = response.text
                 
-            return html
-            
-        except Exception as e:
-            print(f"Request error: {e}")
-            time.sleep(2)
-            
-    return None # Return None kalau gagal total setelah retry
+                # Deteksi halaman blokiran Cloudflare
+                if "Just a moment..." in html or "Checking your browser" in html or "Attention Required!" in html:
+                    print(f"[!] CF block ({profile}) pada {url}. Ganti topeng...")
+                    time.sleep(2)
+                    break # Gagal di profil ini, langsung ganti ke profil berikutnya
+                    
+                # Jika berhasil dapat HTML bersih
+                return html
+                
+            except Exception as e:
+                print(f"Error ({profile}): {e}")
+                time.sleep(2)
+                
+    return None # Gagal total setelah coba semua profil
