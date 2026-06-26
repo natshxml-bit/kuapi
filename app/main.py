@@ -2,60 +2,68 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from cachetools import TTLCache
-from app import home, detail, watch
+from app import detail, watch, properties # Hapus anime_list
 
 app = FastAPI(title="Kuramanime Unofficial API")
 
-# Setup CORS & Cache
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-cache = TTLCache(maxsize=100, ttl=300) # Cache 5 Menit
+cache = TTLCache(maxsize=100, ttl=300) 
 
 @app.get("/")
 def root():
-    return {"status": "Online", "endpoints": ["/api/home", "/api/detail/{slug}", "/api/watch/{slug}/{episode}"]}
+    return {
+        "status": "Online", 
+        "endpoints": [
+            "/api/properties", 
+            "/api/anime-list?url_path=/quick/ongoing&page=1", 
+            "/api/detail/{slug}", 
+            "/api/watch/{slug}/{episode}"
+        ]
+    }
 
-# app/main.py
-# ... (import & setup cache sama seperti sebelumnya) ...
+@app.get("/api/properties")
+def api_properties():
+    cache_key = "properties_data"
+    if cache_key in cache: return {"source": "cache", "data": cache[cache_key]}
+    data = properties.get_properties()
+    if "error" in data: raise HTTPException(status_code=500, detail=data["error"])
+    cache[cache_key] = data
+    return {"source": "fresh_scrape", "data": data}
 
-@app.get("/api/home")
-def api_home():
-    if "home_data" in cache:
-        return {"source": "cache", "data": cache["home_data"]}
+@app.get("/api/anime-list")
+def api_anime_list(url_path: str = "/quick/ongoing", page: int = 1):
+    """
+    Mengambil daftar anime beserta SLUG-nya.
+    Contoh url_path: 
+    - /quick/ongoing (Sedang Tayang)
+    - /quick/finished (Selesai)
+    - /quick/movie (Movie)
+    - /properties/genre/isekai (Berdasarkan Genre)
+    """
+    cache_key = f"list_{url_path}_{page}"
+    if cache_key in cache: return {"source": "cache", "data": cache[cache_key]}
     
-    # Panggil fungsi yang sekarang return 2 nilai (data, debug_info)
-    data, debug_info = home.get_homepage()
+    # Panggil dari properties sekarang
+    data = properties.get_anime_list(url_path, page)
+    if "error" in data: raise HTTPException(status_code=500, detail=data["error"])
     
-    # Kalau data kosong, munculkan info debug biar ketahuan salahnya di mana
-    if not data:
-        return {
-            "source": "error_gagal_scrape", 
-            "debug": debug_info
-        }
-        
-    cache["home_data"] = data
-    return {"source": "fresh_scrape", "total": len(data), "data": data}
+    cache[cache_key] = data
+    return {"source": "fresh_scrape", "data": data}
 
 @app.get("/api/detail/{slug:path}")
 def api_detail(slug: str):
-    # Cache key khusus untuk detail agar tidak menimpa cache home
     cache_key = f"detail_{slug}"
-    if cache_key in cache:
-        return {"source": "cache", "data": cache[cache_key]}
-
-    try:
-        data = detail.get_detail(slug)
-        cache[cache_key] = data
-        return {"source": "fresh_scrape", "data": data}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Gagal mengambil detail: {str(e)}")
+    if cache_key in cache: return {"source": "cache", "data": cache[cache_key]}
+    data = detail.get_detail(slug)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    cache[cache_key] = data
+    return {"source": "fresh_scrape", "data": data}
 
 @app.get("/api/watch/{slug:path}/{episode}")
 def api_watch(slug: str, episode: int):
-    # Data watch TIDAK BOLEH di-cache lama, karena link streaming sering expire/rotate
     try:
         data = watch.get_watch_url(slug, episode)
-        if not data['streaming_iframe_url']:
-             raise HTTPException(status_code=404, detail="Iframe video tidak ditemukan di halaman.")
+        if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
         return {"source": "fresh_scrape", "data": data}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error watch page: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
